@@ -3,7 +3,6 @@ package com.moulberry.flashback.visuals;
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.action.PositionAndAngle;
 import com.moulberry.flashback.packet.FlashbackAccurateEntityPosition;
-import com.moulberry.flashback.playback.ReplayServer;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.DeltaTracker;
@@ -90,48 +89,6 @@ public class AccurateEntityPositionHandler {
             }
         }
         return null;
-    }
-
-    public static void apply(ClientLevel level, DeltaTracker deltaTracker) {
-        if (currentData == null || level == null) {
-            return;
-        }
-
-        float partialTick = deltaTracker.getGameTimeDeltaPartialTick(true);
-
-        ReplayServer replayServer = Flashback.getReplayServer();
-        if (replayServer != null) {
-            for (Int2ObjectMap.Entry<List<PositionAndAngle>> entry : currentData.int2ObjectEntrySet()) {
-                Entity entity = level.getEntity(entry.getIntKey());
-                if (entity == null) {
-                    continue;
-                }
-
-                List<PositionAndAngle> positionAndAngles = entry.getValue();
-                float amount = partialTick * (positionAndAngles.size() - 1);
-
-                int floorAmount = (int) amount;
-                PositionAndAngle floorPosition = positionAndAngles.get(floorAmount);
-
-                int ceilAmount = floorAmount + 1;
-
-                if (ceilAmount >= positionAndAngles.size()) {
-                    applyPosition(entity, floorPosition.x(), floorPosition.y(), floorPosition.z(), floorPosition.yaw(), floorPosition.pitch());
-                } else {
-                    PositionAndAngle ceilPosition = positionAndAngles.get(ceilAmount);
-                    float partialAmount = amount - floorAmount;
-
-                    double x = floorPosition.x() + (ceilPosition.x() - floorPosition.x()) * partialAmount;
-                    double y = floorPosition.y() + (ceilPosition.y() - floorPosition.y()) * partialAmount;
-                    double z = floorPosition.z() + (ceilPosition.z() - floorPosition.z()) * partialAmount;
-                    float yaw = floorPosition.yaw() + Mth.wrapDegrees(ceilPosition.yaw() - floorPosition.yaw()) * partialAmount;
-                    float pitch = floorPosition.pitch() + Mth.wrapDegrees(ceilPosition.pitch() - floorPosition.pitch()) * partialAmount;
-
-                    applyPosition(entity, x, y, z,  Mth.wrapDegrees(yaw), Mth.wrapDegrees(pitch));
-                }
-
-            }
-        }
     }
 
     private static void applyPosition(Entity entity, double x, double y, double z, float yaw, float pitch) {

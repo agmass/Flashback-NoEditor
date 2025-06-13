@@ -51,14 +51,4 @@ public abstract class MixinClientCommonPacketListenerImpl {
         }
     }
 
-    @Inject(method = "handleCustomPayload(Lnet/minecraft/network/protocol/common/ClientboundCustomPayloadPacket;)V", at = @At("HEAD"), cancellable = true)
-    public void handleCustomPayload(ClientboundCustomPayloadPacket clientboundCustomPayloadPacket, CallbackInfo ci) {
-        if (clientboundCustomPayloadPacket.payload() == FinishedServerTick.INSTANCE) {
-            if (Flashback.EXPORT_JOB != null) {
-                Flashback.EXPORT_JOB.onFinishedServerTick();
-            }
-            ci.cancel();
-        }
-    }
-
 }

@@ -1,7 +1,6 @@
 package com.moulberry.flashback.io;
 
 import com.moulberry.flashback.Flashback;
-import com.moulberry.flashback.playback.ReplayServer;
 import com.moulberry.flashback.action.Action;
 import com.moulberry.flashback.action.ActionRegistry;
 import io.netty.buffer.ByteBuf;
@@ -66,69 +65,6 @@ public class ReplayReader {
         this.friendlyByteBuf.readerIndex(this.replayActionsOffset);
     }
 
-    public void handleSnapshot(ReplayServer replayServer) {
-        this.friendlyByteBuf.readerIndex(this.replaySnapshotOffset);
 
-        replayServer.isProcessingSnapshot = true;
-
-        while (this.friendlyByteBuf.readerIndex() < this.replayActionsOffset) {
-            int id = this.friendlyByteBuf.readVarInt();
-            Action action = this.actions.get(id);
-            if (action == null) {
-                if (this.ignoredActions.containsKey(id)) {
-                    this.lastActionName = this.ignoredActions.get(id);
-                    int size = this.friendlyByteBuf.readInt();
-                    this.friendlyByteBuf.skipBytes(size);
-                    continue;
-                }
-                throw new RuntimeException("Unknown action id: " + id + ". Last action was " + this.lastActionName);
-            }
-            this.lastActionName = action.name();
-
-            int size = this.friendlyByteBuf.readInt();
-            ByteBuf slice = this.friendlyByteBuf.readSlice(size);
-            RegistryFriendlyByteBuf registryFriendlyByteBuf = new RegistryFriendlyByteBuf(slice, this.registryAccess);
-            action.handle(replayServer, registryFriendlyByteBuf);
-
-            if (slice.readerIndex() < slice.writerIndex()) {
-                throw new RuntimeException("Action " + this.lastActionName + " failed to fully read. Had " + slice.writerIndex() + " bytes available, only read " + slice.readerIndex());
-            }
-        }
-
-        replayServer.isProcessingSnapshot = false;
-    }
-
-    public boolean handleNextAction(ReplayServer replayServer) {
-        if (this.friendlyByteBuf.readerIndex() >= this.friendlyByteBuf.writerIndex()) {
-            return false;
-        }
-        if (this.friendlyByteBuf.readerIndex() < this.replayActionsOffset) {
-            this.friendlyByteBuf.readerIndex(this.replayActionsOffset);
-        }
-
-        int id = this.friendlyByteBuf.readVarInt();
-        Action action = this.actions.get(id);
-        if (action == null) {
-            if (this.ignoredActions.containsKey(id)) {
-                this.lastActionName = this.ignoredActions.get(id);
-                int size = this.friendlyByteBuf.readInt();
-                this.friendlyByteBuf.skipBytes(size);
-                return true;
-            }
-            throw new RuntimeException("Unknown action id: " + id + ". Last action was " + this.lastActionName);
-        }
-        this.lastActionName = action.name();
-
-        int size = this.friendlyByteBuf.readInt();
-        ByteBuf slice = this.friendlyByteBuf.readSlice(size);
-        RegistryFriendlyByteBuf registryFriendlyByteBuf = new RegistryFriendlyByteBuf(slice, this.registryAccess);
-        action.handle(replayServer, registryFriendlyByteBuf);
-
-        if (slice.readerIndex() < slice.writerIndex()) {
-            throw new RuntimeException("Action " + this.lastActionName + " failed to fully read. Had " + slice.writerIndex() + " bytes available, only read " + slice.readerIndex());
-        }
-
-        return true;
-    }
 
 }

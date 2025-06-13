@@ -3,9 +3,6 @@ package com.moulberry.flashback.mixin.playback;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.moulberry.flashback.Flashback;
-import com.moulberry.flashback.playback.ReplayServer;
-import com.moulberry.flashback.state.EditorState;
-import com.moulberry.flashback.state.EditorStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -42,23 +39,6 @@ public abstract class MixinEntity {
         return original.call(instance);
     }
 
-    @Inject(method = "isInvisibleTo", at = @At("HEAD"), cancellable = true)
-    public void isInvisibleTo(Player player, CallbackInfoReturnable<Boolean> cir) {
-        ReplayServer replayServer = Flashback.getReplayServer();
-        if (replayServer != null && player == Minecraft.getInstance().player) {
-            EditorState editorState = EditorStateManager.getCurrent();
-            if (editorState != null && editorState.hideDuringExport.contains(this.getUUID())) {
-                cir.setReturnValue(true);
-            }
-
-            int localId = replayServer.getLocalPlayerId();
-            if (this.level.getEntity(localId) instanceof Player localPlayer) {
-                cir.setReturnValue(this.isInvisibleTo(localPlayer));
-            } else {
-                cir.setReturnValue(this.isInvisible());
-            }
-        }
-    }
 
 
 }

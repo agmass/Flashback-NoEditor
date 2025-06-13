@@ -2,7 +2,6 @@ package com.moulberry.flashback.mixin.replay_server;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
-import com.moulberry.flashback.playback.ReplayServer;
 import net.minecraft.network.protocol.login.ServerboundHelloPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
@@ -30,17 +29,5 @@ public abstract class MixinServerLoginPacketListenerImpl {
     @Shadow
     @Nullable
     String requestedUsername;
-
-    @Inject(method = "handleHello", at = @At("HEAD"), cancellable = true)
-    public void handleHello(ServerboundHelloPacket serverboundHelloPacket, CallbackInfo ci) {
-        if (this.server instanceof ReplayServer) {
-            this.requestedUsername = ReplayServer.REPLAY_VIEWER_NAME;
-            UUID replayViewerUUID = UUID.nameUUIDFromBytes(serverboundHelloPacket.name().getBytes(StandardCharsets.UTF_8));
-            GameProfile gameProfile = new GameProfile(replayViewerUUID, ReplayServer.REPLAY_VIEWER_NAME);
-            gameProfile.getProperties().put("IsReplayViewer", new Property("IsReplayViewer", "True"));
-            this.startClientVerification(gameProfile);
-            ci.cancel();
-        }
-    }
 
 }

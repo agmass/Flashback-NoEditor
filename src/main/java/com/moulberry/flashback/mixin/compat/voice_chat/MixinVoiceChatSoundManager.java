@@ -16,12 +16,5 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(value = SoundManager.class, remap = false)
 public class MixinVoiceChatSoundManager {
 
-    @Inject(method = "openContext", at = @At("HEAD"), cancellable = true)
-    public void openContext(CallbackInfoReturnable<Boolean> cir) {
-        if (Flashback.isExporting() && Flashback.EXPORT_JOB.getSettings().recordAudio()) {
-            long context = Minecraft.getInstance().getSoundManager().soundEngine.library.context;
-            cir.setReturnValue(EXTThreadLocalContext.alcSetThreadContext(context));
-        }
-    }
 
 }

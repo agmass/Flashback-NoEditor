@@ -1,6 +1,5 @@
 package com.moulberry.flashback;
 
-import com.moulberry.flashback.playback.ReplayServer;
 import it.unimi.dsi.fastutil.objects.Object2FloatFunction;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.CommonComponents;
@@ -197,10 +196,6 @@ public class Utils {
         String time = dateTime.toLocalTime().toString();
 
         String replay = "unknown";
-        ReplayServer replayServer = Flashback.getReplayServer();
-        if (replayServer != null) {
-            replay = replayServer.getMetadata().name;
-        }
 
         return template
             .replace("%date%", date)

@@ -5,9 +5,6 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.moulberry.flashback.Flashback;
-import com.moulberry.flashback.state.EditorState;
-import com.moulberry.flashback.state.EditorStateManager;
-import com.moulberry.flashback.editor.ui.ReplayUI;
 import com.moulberry.flashback.ext.ItemInHandRendererExt;
 import com.moulberry.flashback.ext.MinecraftExt;
 import com.moulberry.flashback.visuals.AccurateEntityPositionHandler;
@@ -41,14 +38,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MixinGameRenderer {
 
 
-    @WrapOperation(method = "render", at=@At(value = "FIELD", target = "Lnet/minecraft/client/Options;pauseOnLostFocus:Z"))
-    public boolean getPauseOnLostFocus(Options instance, Operation<Boolean> original) {
-        if (ReplayUI.isActive() || Flashback.EXPORT_JOB != null) {
-            return false;
-        }
-        return original.call(instance);
-    }
-
     /*
      * Render item in hand for spectators in a replay
      */
@@ -57,12 +46,6 @@ public abstract class MixinGameRenderer {
     @Final
     Minecraft minecraft;
 
-    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(I)V", remap = false, ordinal = 0), cancellable = true)
-    public void render_noGui(DeltaTracker deltaTracker, boolean bl, CallbackInfo ci) {
-        if (Flashback.isExporting() && Flashback.EXPORT_JOB.getSettings().noGui()) {
-            ci.cancel();
-        }
-    }
 
     @WrapOperation(method = "renderItemInHand", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/MultiPlayerGameMode;getPlayerMode()Lnet/minecraft/world/level/GameType;"))
     public GameType getPlayerMode(MultiPlayerGameMode instance, Operation<GameType> original) {
@@ -92,40 +75,11 @@ public abstract class MixinGameRenderer {
         original.call(instance, blockGetter, entity, bl, bl2, f);
     }
 
-    @Inject(method = "getNightVisionScale", at = @At("HEAD"), cancellable = true)
-    private static void getNightVisionScale(LivingEntity livingEntity, float f, CallbackInfoReturnable<Float> cir) {
-        EditorState editorState = EditorStateManager.getCurrent();
-        if (editorState != null && editorState.replayVisuals.overrideNightVision) {
-            cir.setReturnValue(1.0f);
-        }
-    }
-
-    @WrapOperation(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;rotation()Lorg/joml/Quaternionf;"))
-    public Quaternionf renderLevel(Camera instance, Operation<Quaternionf> original) {
-        return CameraRotation.modifyViewQuaternion(original.call(instance));
-    }
 
     @Inject(method = "tryTakeScreenshotIfNeeded", at = @At("HEAD"), cancellable = true)
     public void tryTakeScreenshotIfNeeded(CallbackInfo ci) {
         if (Flashback.isInReplay()) {
             ci.cancel();
-        }
-    }
-
-    @Inject(method = "getFov", at = @At("HEAD"), cancellable = true)
-    public void getFov(Camera camera, float f, boolean bl, CallbackInfoReturnable<Float> cir) {
-        if (Flashback.isInReplay()) {
-            if (!bl) {
-                cir.setReturnValue(70.0f);
-                return;
-            }
-            EditorState editorState = EditorStateManager.getCurrent();
-            if (editorState != null && editorState.replayVisuals.overrideFov) {
-                cir.setReturnValue(editorState.replayVisuals.overrideFovAmount);
-            } else {
-                int fov = this.minecraft.options.fov().get().intValue();
-                cir.setReturnValue((float) fov);
-            }
         }
     }
 

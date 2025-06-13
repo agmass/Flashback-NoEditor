@@ -1,7 +1,6 @@
 package com.moulberry.flashback.mixin.compat.axiom;
 
 import com.moulberry.flashback.Flashback;
-import com.moulberry.flashback.editor.ui.ReplayUI;
 import com.moulberry.mixinconstraints.annotations.IfModLoaded;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -18,12 +17,5 @@ public class MixinAxiomEditorUI {
     @Shadow
     private static boolean enabled;
 
-    @Inject(method = "isActiveInternal", at = @At("HEAD"), cancellable = true)
-    private static void isActiveInternal(CallbackInfoReturnable<Boolean> cir) {
-        if (ReplayUI.isActive() || Flashback.isInReplay()) {
-            enabled = false;
-            cir.setReturnValue(false);
-        }
-    }
 
 }

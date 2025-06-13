@@ -1,7 +1,6 @@
 package com.moulberry.flashback.compat;
 
 import com.moulberry.flashback.Flashback;
-import com.moulberry.flashback.playback.ReplayServer;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.api.interfaces.override.levelHandling.IDhApiSaveStructure;
 import com.seibel.distanthorizons.api.interfaces.world.IDhApiLevelWrapper;
@@ -40,14 +39,6 @@ public class DistantHorizonsSupport {
                     DhApi.Delayed.worldProxy.setReadOnly(true);
 
                     Flashback.LOGGER.info("Binding IDhApiSaveStructure to REPLAY_SAVE_STRUCTURE");
-
-                    ReplayServer replayServer = Flashback.getReplayServer();
-                    REPLAY_SAVE_STRUCTURE.pathOverrides.clear();
-                    for (Map.Entry<String, File> entry : replayServer.getMetadata().distantHorizonPaths.entrySet()) {
-                        if (entry.getValue().exists()) {
-                            REPLAY_SAVE_STRUCTURE.pathOverrides.put(entry.getKey(), entry.getValue());
-                        }
-                    }
 
                     DhApi.overrides.bind(IDhApiSaveStructure.class, REPLAY_SAVE_STRUCTURE);
                     boundReplaySaveStructure = true;

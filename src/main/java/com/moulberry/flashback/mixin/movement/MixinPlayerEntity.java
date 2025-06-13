@@ -3,8 +3,6 @@ package com.moulberry.flashback.mixin.movement;
 import com.moulberry.flashback.EnhancedFlight;
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.configuration.FlashbackConfig;
-import com.moulberry.flashback.state.EditorState;
-import com.moulberry.flashback.state.EditorStateManager;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.player.RemotePlayer;
@@ -57,17 +55,5 @@ public abstract class MixinPlayerEntity extends LivingEntity {
         }
     }
 
-    @Inject(method = "getName", at = @At("HEAD"), cancellable = true)
-    public void getName(CallbackInfoReturnable<Component> cir) {
-        if ((Object)this instanceof RemotePlayer) {
-            EditorState editorState = EditorStateManager.getCurrent();
-            if (editorState != null) {
-                String nameOverride = editorState.nameOverride.get(this.uuid);
-                if (nameOverride != null) {
-                    cir.setReturnValue(Component.literal(nameOverride));
-                }
-            }
-        }
-    }
 
 }

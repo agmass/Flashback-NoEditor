@@ -14,19 +14,5 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(value = SystemTimeUniforms.Timer.class, remap = false)
 public class MixinIrisSystemTimeUniforms {
 
-    @Inject(method = "getFrameTimeCounter", at = @At("HEAD"), require = 0, cancellable = true)
-    public void getFrameTimeCounter(CallbackInfoReturnable<Float> cir) {
-        if (Flashback.isExporting()) {
-            double currentTick = Flashback.EXPORT_JOB.getCurrentTickDouble();
-            cir.setReturnValue((float)(currentTick / 20));
-        }
-    }
-
-    @Inject(method = "getLastFrameTime", at = @At("HEAD"), require = 0, cancellable = true)
-    public void getLastFrameTime(CallbackInfoReturnable<Float> cir) {
-        if (Flashback.isExporting()) {
-            cir.setReturnValue((float)(1 / Flashback.EXPORT_JOB.getSettings().framerate()));
-        }
-    }
 
 }

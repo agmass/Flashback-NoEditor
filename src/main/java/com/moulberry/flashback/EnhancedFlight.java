@@ -1,7 +1,6 @@
 package com.moulberry.flashback;
 
 import com.moulberry.flashback.configuration.FlashbackConfig;
-import com.moulberry.flashback.state.EditorState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;

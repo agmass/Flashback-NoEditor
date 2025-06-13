@@ -4,10 +4,6 @@ import com.mojang.serialization.Codec;
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.FlashbackGson;
 import com.moulberry.flashback.SneakyThrow;
-import com.moulberry.flashback.combo_options.AudioCodec;
-import com.moulberry.flashback.combo_options.VideoCodec;
-import com.moulberry.flashback.combo_options.VideoContainer;
-import com.moulberry.flashback.keyframe.interpolation.InterpolationType;
 import com.moulberry.flashback.screen.select_replay.ReplaySorting;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
@@ -81,7 +77,6 @@ public class FlashbackConfig {
 
     public List<String> recentReplays = new ArrayList<>();
     public String defaultExportFilename = "%date%T%time%";
-    public InterpolationType defaultInterpolationType = InterpolationType.SMOOTH;
     public boolean useRealtimeInterpolation = true;
 
     public boolean disableIncreasedFirstPersonUpdates = false;
@@ -96,15 +91,11 @@ public class FlashbackConfig {
     public boolean resetRng = false;
     public boolean ssaa = false;
     public boolean noGui = false;
-
-    public VideoContainer container = null;
-    public VideoCodec videoCodec = null;
     public int[] selectedVideoEncoder = new int[]{0};
     public boolean useMaximumBitrate = false;
 
     public boolean recordAudio = false;
     public boolean transparentBackground = false;
-    public AudioCodec audioCodec = AudioCodec.AAC;
     public boolean stereoAudio = false;
 
     public String defaultExportPath = null;

@@ -10,8 +10,6 @@ import com.mojang.math.Axis;
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.ext.ItemInHandRendererExt;
 import com.moulberry.flashback.ext.RemotePlayerExt;
-import com.moulberry.flashback.state.EditorState;
-import com.moulberry.flashback.state.EditorStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
@@ -93,37 +91,6 @@ public abstract class MixinItemInHandRenderer implements ItemInHandRendererExt {
         return RENDER_BOTH_HANDS;
     }
 
-    @Override
-    public void flashback$renderHandsWithItems(float partialTick, PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, AbstractClientPlayer clientPlayer, int i) {
-        EditorState editorState = EditorStateManager.getCurrent();
-        if (editorState != null && editorState.hideDuringExport.contains(clientPlayer.getUUID())) {
-            return;
-        }
-
-        float m;
-        float l;
-        float g = clientPlayer.getAttackAnim(partialTick);
-        InteractionHand interactionHand = MoreObjects.firstNonNull(clientPlayer.swingingArm, InteractionHand.MAIN_HAND);
-        float h = Mth.lerp(partialTick, clientPlayer.xRotO, clientPlayer.getXRot());
-         int handRenderSelection = evaluateWhichHandsToRender(clientPlayer);
-        if (clientPlayer instanceof RemotePlayerExt remotePlayerExt) {
-            float xBob = remotePlayerExt.flashback$getXBob(partialTick);
-            float yBob = remotePlayerExt.flashback$getYBob(partialTick);
-            poseStack.mulPose(Axis.XP.rotationDegrees(Mth.wrapDegrees(clientPlayer.getViewXRot(partialTick) - xBob) * 0.1f));
-            poseStack.mulPose(Axis.YP.rotationDegrees(Mth.wrapDegrees(clientPlayer.getViewYRot(partialTick) - yBob) * 0.1f));
-        }
-        if ((handRenderSelection & RENDER_MAIN_HAND) != 0) {
-            l = interactionHand == InteractionHand.MAIN_HAND ? g : 0.0f;
-            m = 1.0f - Mth.lerp(partialTick, this.oMainHandHeight, this.mainHandHeight);
-            renderArmWithItem(clientPlayer, partialTick, h, InteractionHand.MAIN_HAND, l, this.mainHandItem, m, poseStack, bufferSource, i);
-        }
-        if ((handRenderSelection & RENDER_OFF_HAND) != 0) {
-            l = interactionHand == InteractionHand.OFF_HAND ? g : 0.0f;
-            m = 1.0f - Mth.lerp(partialTick, this.oOffHandHeight, this.offHandHeight);
-            renderArmWithItem(clientPlayer, partialTick, h, InteractionHand.OFF_HAND, l, this.offHandItem, m, poseStack, bufferSource, i);
-        }
-        bufferSource.endBatch();
-    }
 
     @Inject(method = "renderPlayerArm", at = @At(value = "FIELD", target = "Lnet/minecraft/client/renderer/ItemInHandRenderer;entityRenderDispatcher:Lnet/minecraft/client/renderer/entity/EntityRenderDispatcher;"))
     public void renderPlayerArm(PoseStack poseStack, MultiBufferSource multiBufferSource, int i, float f, float g,

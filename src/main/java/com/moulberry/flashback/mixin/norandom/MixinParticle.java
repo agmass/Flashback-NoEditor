@@ -16,18 +16,5 @@ import java.util.Random;
 @Mixin(Particle.class)
 public class MixinParticle {
 
-    @Shadow
-    @Final
-    protected RandomSource random;
-
-    @Inject(method = "<init>(Lnet/minecraft/client/multiplayer/ClientLevel;DDD)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/particle/Particle;setSize(FF)V"))
-    private void newParticle(ClientLevel clientLevel, double d, double e, double f, CallbackInfo ci) {
-        if (Flashback.isExporting()) {
-            Random random = Flashback.EXPORT_JOB.getParticleRandom();
-            if (random != null) {
-                this.random.setSeed(random.nextLong());
-            }
-        }
-    }
 
 }

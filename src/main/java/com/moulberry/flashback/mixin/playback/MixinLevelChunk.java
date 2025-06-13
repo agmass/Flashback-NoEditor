@@ -2,7 +2,6 @@ package com.moulberry.flashback.mixin.playback;
 
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.ext.LevelChunkExt;
-import com.moulberry.flashback.playback.ReplayServer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.SectionPos;
@@ -67,19 +66,6 @@ public abstract class MixinLevelChunk extends ChunkAccess implements LevelChunkE
         this.cachedChunkId = id;
     }
 
-    @Inject(method = "setBlockState", at = @At("RETURN"))
-    public void setBlockState(BlockPos blockPos, BlockState blockState, boolean bl, CallbackInfoReturnable<BlockState> cir) {
-        ReplayServer replayServer = Flashback.getReplayServer();
-        if (replayServer == null) {
-            return;
-        }
-
-        BlockState old = cir.getReturnValue();
-        if (old != null && old != blockState) {
-            replayServer.blockChangeOccurred(blockPos, blockState);
-            this.cachedChunkId = -1;
-        }
-    }
 
     @Override
     public BlockState flashback$setBlockStateWithoutUpdates(BlockPos blockPos, BlockState blockState) {

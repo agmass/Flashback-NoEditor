@@ -10,7 +10,6 @@ import com.moulberry.flashback.action.ActionConfigurationPacket;
 import com.moulberry.flashback.action.ActionCreateLocalPlayer;
 import com.moulberry.flashback.action.ActionGamePacket;
 import com.moulberry.flashback.action.ActionLevelChunkCached;
-import com.moulberry.flashback.playback.ReplayServer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
@@ -136,7 +135,7 @@ public class AsyncReplaySaver {
                         this.totalWrittenChunkPackets += 1;
 
                         // Write chunk cache file if necessary
-                        int cacheIndex = index / ReplayServer.CHUNK_CACHE_SIZE;
+                        int cacheIndex = index / 10000;
                         if (lastChunkCacheIndex >= 0 && cacheIndex != lastChunkCacheIndex) {
                             this.writeChunkCacheFile(chunkCacheOutput, lastChunkCacheIndex);
                             chunkCacheOutput = null;

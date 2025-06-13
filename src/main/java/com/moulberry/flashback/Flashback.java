@@ -12,21 +12,7 @@ import com.moulberry.flashback.command.BetterColorArgument;
 import com.moulberry.flashback.compat.DistantHorizonsSupport;
 import com.moulberry.flashback.compat.simple_voice_chat.SimpleVoiceChatPlayback;
 import com.moulberry.flashback.configuration.FlashbackConfig;
-import com.moulberry.flashback.exporting.AsyncFileDialogs;
-import com.moulberry.flashback.exporting.ExportJob;
-import com.moulberry.flashback.exporting.taskbar.TaskbarManager;
 import com.moulberry.flashback.ext.MinecraftExt;
-import com.moulberry.flashback.keyframe.KeyframeRegistry;
-import com.moulberry.flashback.keyframe.types.BlockOverrideKeyframeType;
-import com.moulberry.flashback.keyframe.types.CameraKeyframeType;
-import com.moulberry.flashback.keyframe.types.CameraOrbitKeyframeType;
-import com.moulberry.flashback.keyframe.types.CameraShakeKeyframeType;
-import com.moulberry.flashback.keyframe.types.TrackEntityKeyframeType;
-import com.moulberry.flashback.keyframe.types.FOVKeyframeType;
-import com.moulberry.flashback.keyframe.types.FreezeKeyframeType;
-import com.moulberry.flashback.keyframe.types.SpeedKeyframeType;
-import com.moulberry.flashback.keyframe.types.TimeOfDayKeyframeType;
-import com.moulberry.flashback.keyframe.types.TimelapseKeyframeType;
 import com.moulberry.flashback.packet.FlashbackAccurateEntityPosition;
 import com.moulberry.flashback.packet.FlashbackClearEntities;
 import com.moulberry.flashback.packet.FlashbackClearParticles;
@@ -40,7 +26,6 @@ import com.moulberry.flashback.packet.FlashbackRemoteSetSlot;
 import com.moulberry.flashback.packet.FlashbackSetBorderLerpStartTime;
 import com.moulberry.flashback.packet.FlashbackVoiceChatSound;
 import com.moulberry.flashback.playback.EmptyLevelSource;
-import com.moulberry.flashback.playback.ReplayServer;
 import com.moulberry.flashback.record.FlashbackMeta;
 import com.moulberry.flashback.record.Recorder;
 import com.moulberry.flashback.record.ReplayExporter;
@@ -49,8 +34,6 @@ import com.moulberry.flashback.screen.ConfigScreen;
 import com.moulberry.flashback.screen.RecoverRecordingsScreen;
 import com.moulberry.flashback.screen.SaveReplayScreen;
 import com.moulberry.flashback.screen.UnsupportedLoaderScreen;
-import com.moulberry.flashback.state.EditorState;
-import com.moulberry.flashback.state.EditorStateManager;
 import com.moulberry.flashback.visuals.AccurateEntityPositionHandler;
 import com.moulberry.flashback.visuals.ShaderManager;
 import com.seibel.distanthorizons.api.DhApi;
@@ -134,7 +117,6 @@ public class Flashback implements ModInitializer, ClientModInitializer {
 
     public static final int MAGIC = 0xD780E884;
     public static Recorder RECORDER = null;
-    public static ExportJob EXPORT_JOB = null;
     private static FlashbackConfig config;
     private static Path configDirectory = null;
 
@@ -243,17 +225,6 @@ public class Flashback implements ModInitializer, ClientModInitializer {
         ActionRegistry.register(ActionLevelChunkCached.INSTANCE);
         ActionRegistry.register(ActionAccuratePlayerPosition.INSTANCE);
 
-        KeyframeRegistry.register(CameraKeyframeType.INSTANCE);
-        KeyframeRegistry.register(CameraOrbitKeyframeType.INSTANCE);
-        KeyframeRegistry.register(TrackEntityKeyframeType.INSTANCE);
-        KeyframeRegistry.register(CameraShakeKeyframeType.INSTANCE);
-        KeyframeRegistry.register(FOVKeyframeType.INSTANCE);
-        KeyframeRegistry.register(SpeedKeyframeType.INSTANCE);
-        KeyframeRegistry.register(TimelapseKeyframeType.INSTANCE);
-        KeyframeRegistry.register(TimeOfDayKeyframeType.INSTANCE);
-        KeyframeRegistry.register(FreezeKeyframeType.INSTANCE);
-        KeyframeRegistry.register(BlockOverrideKeyframeType.INSTANCE);
-
         ClientPlayNetworking.registerGlobalReceiver(FlashbackForceClientTick.TYPE, (payload, context) -> {
             if (Flashback.isInReplay()) {
                 Minecraft.getInstance().tick();
@@ -327,13 +298,6 @@ public class Flashback implements ModInitializer, ClientModInitializer {
             }
         });
 
-        if (FabricLoader.getInstance().isModLoaded("voicechat")) {
-            ClientPlayNetworking.registerGlobalReceiver(FlashbackVoiceChatSound.TYPE, (payload, context) -> {
-                if (Flashback.isInReplay()) {
-                    SimpleVoiceChatPlayback.play(payload);
-                }
-            });
-        }
 
         ClientPlayNetworking.registerGlobalReceiver(FlashbackAccurateEntityPosition.TYPE, (payload, context) -> {
             if (Flashback.isInReplay()) {
@@ -376,56 +340,6 @@ public class Flashback implements ModInitializer, ClientModInitializer {
                     return 0;
                 })))));
             dispatcher.register(flashback);
-        });
-
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-            if (!Flashback.isInReplay() && !isOpeningReplay) {
-                return;
-            }
-
-            String hideName = "hide";
-            if (dispatcher.findNode(Collections.singleton("hide")) != null) {
-                hideName = "hide_flashback";
-            }
-            var hideEntity = Commands.literal(hideName).then(Commands.argument("targets", EntityArgument.entities()).executes(command -> {
-                EditorState editorState = EditorStateManager.getCurrent();
-                if (!Flashback.isInReplay() || editorState == null) {
-                    command.getSource().sendFailure(Component.literal("/hide is only available inside a Flashback replay"));
-                    return 0;
-                }
-                var entities = EntityArgument.getEntities(command, "targets");
-
-                for (Entity entity : entities) {
-                    editorState.hideDuringExport.add(entity.getUUID());
-                }
-
-                int count = entities.size();
-                command.getSource().sendSuccess(() -> Component.literal(count + " entities are now hidden during export"), false);
-                return 0;
-            }));
-            dispatcher.register(hideEntity);
-
-            String showName = "show";
-            if (dispatcher.findNode(Collections.singleton("show")) != null) {
-                showName = "show_flashback";
-            }
-            var showEntity = Commands.literal(showName).then(Commands.argument("targets", EntityArgument.entities()).executes(command -> {
-                EditorState editorState = EditorStateManager.getCurrent();
-                if (!Flashback.isInReplay() || editorState == null) {
-                    command.getSource().sendFailure(Component.literal("/show is only available inside a Flashback replay"));
-                    return 0;
-                }
-                var entities = EntityArgument.getEntities(command, "targets");
-
-                for (Entity entity : entities) {
-                    editorState.hideDuringExport.remove(entity.getUUID());
-                }
-
-                int count = entities.size();
-                command.getSource().sendSuccess(() -> Component.literal(count + " entities are no longer hidden during export"), false);
-                return 0;
-            }));
-            dispatcher.register(showEntity);
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
@@ -747,24 +661,16 @@ public class Flashback implements ModInitializer, ClientModInitializer {
         return config;
     }
 
-    @Nullable
-    public static ReplayServer getReplayServer() {
-        if (Minecraft.getInstance().getSingleplayerServer() instanceof ReplayServer replayServer) {
-            return replayServer;
-        }
-        return null;
-    }
-
     public static void removePendingReplaySave(Path recordFolder) {
         pendingReplaySave.remove(recordFolder);
     }
 
     public static boolean isExporting() {
-        return EXPORT_JOB != null && EXPORT_JOB.isRunning();
+        return false;
     }
 
     public static void updateIsInReplay() {
-        isInReplay = Minecraft.getInstance().getSingleplayerServer() instanceof ReplayServer;
+        isInReplay = false;
     }
 
     public static boolean isInReplay() {
@@ -772,21 +678,7 @@ public class Flashback implements ModInitializer, ClientModInitializer {
     }
 
     public static long getVisualMillis() {
-        ReplayServer replayServer = Flashback.getReplayServer();
-        if (replayServer != null) {
-            float tick;
-
-            ExportJob exportJob = Flashback.EXPORT_JOB;
-            if (exportJob != null) {
-                tick = (float) exportJob.getCurrentTickDouble();
-            } else {
-                tick = replayServer.getPartialReplayTick();
-            }
-
-            return (long)(tick * 50L);
-        } else {
-            return Util.getMillis();
-        }
+        return Util.getMillis();
     }
 
     private int startRecordingReplay(CommandContext<FabricClientCommandSource> command) {
@@ -901,14 +793,7 @@ public class Flashback implements ModInitializer, ClientModInitializer {
 
     public static void openReplayFromFileBrowser() {
         String defaultFolder = Flashback.getReplayFolder().toString();
-        AsyncFileDialogs.openFileDialog(defaultFolder, "Zip File", "zip").thenAccept(pathStr -> {
-            if (pathStr != null) {
-                Path path = Path.of(pathStr);
-                Minecraft.getInstance().submit(() -> {
-                    Flashback.openReplayWorld(path);
-                });
-            }
-        });
+
     }
 
     public static void openReplayWorld(Path path) {
@@ -978,7 +863,6 @@ public class Flashback implements ModInitializer, ClientModInitializer {
 
             ((MinecraftExt)Minecraft.getInstance()).flashback$startReplayServer(access, packRepository, worldStem, replayUuid, path);
 
-            TaskbarManager.launchTaskbarManager();
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {

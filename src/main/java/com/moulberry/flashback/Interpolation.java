@@ -1,7 +1,5 @@
 package com.moulberry.flashback;
 
-import com.moulberry.flashback.keyframe.Keyframe;
-import com.moulberry.flashback.keyframe.impl.CameraKeyframe;
 import net.minecraft.util.Mth;
 import org.apache.commons.math3.analysis.interpolation.HermiteInterpolator;
 import org.joml.Math;

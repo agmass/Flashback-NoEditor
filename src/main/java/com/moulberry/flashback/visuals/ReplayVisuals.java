@@ -1,8 +1,5 @@
 package com.moulberry.flashback.visuals;
 
-import com.moulberry.flashback.combo_options.AspectRatio;
-import com.moulberry.flashback.combo_options.Sizing;
-import com.moulberry.flashback.combo_options.WeatherOverride;
 import net.minecraft.client.Minecraft;
 
 public class ReplayVisuals {
@@ -42,8 +39,6 @@ public class ReplayVisuals {
     public boolean overrideRoll = false;
     public float overrideRollAmount = 0.0f;
 
-    public WeatherOverride overrideWeatherMode = WeatherOverride.NONE;
-
     public long overrideTimeOfDay = -1;
 
     public boolean overrideNightVision = false;
@@ -51,8 +46,6 @@ public class ReplayVisuals {
     public boolean ruleOfThirdsGuide = false;
     public boolean centerGuide = false;
     public boolean cameraPath = true;
-    public Sizing sizing = Sizing.KEEP_ASPECT_RATIO;
-    public AspectRatio changeAspectRatio = AspectRatio.ASPECT_16_9;
 
     public void setFov(float fov) {
         if (!overrideFov || Math.abs(overrideFovAmount - fov) >= 0.01) {
