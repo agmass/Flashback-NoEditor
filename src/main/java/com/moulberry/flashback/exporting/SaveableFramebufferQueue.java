@@ -1,28 +1,23 @@
 package com.moulberry.flashback.exporting;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.opengl.GlStateManager;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.AddressMode;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.moulberry.flashback.visuals.ShaderManager;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.CompiledShaderProgram;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.opengl.GL11;
 
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.OptionalInt;
 
 public class SaveableFramebufferQueue implements AutoCloseable {
 
@@ -34,14 +29,12 @@ public class SaveableFramebufferQueue implements AutoCloseable {
     private final List<SaveableFramebuffer> available = new ArrayList<>();
     private final List<SaveableFramebuffer> waiting = new ArrayList<>();
 
-    private final GpuTexture flipBuffer;
+    private final RenderTarget flipBuffer;
 
     public SaveableFramebufferQueue(int width, int height) {
         this.width = width;
         this.height = height;
-
-        this.flipBuffer = RenderSystem.getDevice().createTexture(() -> "flip buffer", TextureFormat.RGBA8, width, height, 1);
-        this.flipBuffer.setAddressMode(AddressMode.CLAMP_TO_EDGE);
+        this.flipBuffer = new TextureTarget(width, height, false);
 
         for (int i = 0; i < CAPACITY; i++) {
             this.available.add(new SaveableFramebuffer());
@@ -56,48 +49,35 @@ public class SaveableFramebufferQueue implements AutoCloseable {
     }
 
     private void blitFlip(RenderTarget src, boolean supersampling) {
-        FilterMode oldFilterMode = src.filterMode;
+        int oldFilterMode = src.filterMode;
         if (supersampling) {
-            src.setFilterMode(FilterMode.LINEAR);
+            src.setFilterMode(GL11.GL_LINEAR);
         }
 
-        RenderSystem.AutoStorageIndexBuffer autoStorageIndexBuffer = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
-        GpuBuffer indexBuffer = autoStorageIndexBuffer.getBuffer(6);
-        GpuBuffer vertexBuffer = RenderSystem.getQuadVertexBuffer();
+        GlStateManager._colorMask(true, true, true, true);
+        GlStateManager._disableDepthTest();
+        GlStateManager._depthMask(false);
+        GlStateManager._viewport(0, 0, src.width, src.height);
+        GlStateManager._disableBlend();
+        RenderSystem.disableCull();
 
-        try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(this.flipBuffer, OptionalInt.empty())) {
-            renderPass.setPipeline(ShaderManager.BLIT_SCREEN_FLIP);
-            renderPass.setVertexBuffer(0, vertexBuffer);
-            renderPass.setIndexBuffer(indexBuffer, autoStorageIndexBuffer.type());
-            renderPass.bindSampler("InSampler", src.getColorTexture());
-            renderPass.drawIndexed(0, 6);
-        }
+        this.flipBuffer.bindWrite(true);
+        CompiledShaderProgram shaderInstance = Objects.requireNonNull(
+                RenderSystem.setShader(ShaderManager.blitScreenFlip), "Blit shader not loaded"
+        );
+        shaderInstance.bindSampler("InSampler", src.colorTextureId);
+        shaderInstance.apply();
+        BufferBuilder bufferBuilder = RenderSystem.renderThreadTesselator().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLIT_SCREEN);
+        bufferBuilder.addVertex(0.0F, 1.0F, 0.0F);
+        bufferBuilder.addVertex(1.0F, 1.0F, 0.0F);
+        bufferBuilder.addVertex(1.0F, 0.0F, 0.0F);
+        bufferBuilder.addVertex(0.0F, 0.0F, 0.0F);
+        BufferUploader.draw(bufferBuilder.buildOrThrow());
+        shaderInstance.clear();
 
-        // todo nobuild
-//        GlStateManager._colorMask(true, true, true, true);
-//        GlStateManager._disableDepthTest();
-//        GlStateManager._depthMask(false);
-//        GlStateManager._viewport(0, 0, src.width, src.height);
-//        GlStateManager._disableBlend();
-//        RenderSystem.disableCull();
-//
-//        this.flipBuffer.bindWrite(true);
-//        CompiledShaderProgram shaderInstance = Objects.requireNonNull(
-//                RenderSystem.setShader(ShaderManager.blitScreenFlip), "Blit shader not loaded"
-//        );
-//        shaderInstance.bindSampler("InSampler", src.colorTextureId);
-//        shaderInstance.apply();
-//        BufferBuilder bufferBuilder = RenderSystem.renderThreadTesselator().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLIT_SCREEN);
-//        bufferBuilder.addVertex(0.0F, 1.0F, 0.0F);
-//        bufferBuilder.addVertex(1.0F, 1.0F, 0.0F);
-//        bufferBuilder.addVertex(1.0F, 0.0F, 0.0F);
-//        bufferBuilder.addVertex(0.0F, 0.0F, 0.0F);
-//        BufferUploader.draw(bufferBuilder.buildOrThrow());
-//        shaderInstance.clear();
-//
-//        GlStateManager._depthMask(true);
-//        GlStateManager._colorMask(true, true, true, true);
-//        RenderSystem.enableCull();
+        GlStateManager._depthMask(true);
+        GlStateManager._colorMask(true, true, true, true);
+        RenderSystem.enableCull();
 
         if (supersampling) {
             src.setFilterMode(oldFilterMode);
@@ -143,7 +123,7 @@ public class SaveableFramebufferQueue implements AutoCloseable {
         }
         this.waiting.clear();
         this.available.clear();
-        this.flipBuffer.close();
+        this.flipBuffer.destroyBuffers();
     }
 
 

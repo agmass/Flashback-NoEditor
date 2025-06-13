@@ -1,11 +1,11 @@
 package com.moulberry.flashback.exporting;
 
-import com.mojang.blaze3d.opengl.GlDevice;
-import com.mojang.blaze3d.opengl.GlStateManager;
-import com.mojang.blaze3d.opengl.GlTexture;
+import com.mojang.blaze3d.pipeline.MainTarget;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
+import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
@@ -25,7 +25,7 @@ public class SaveableFramebuffer implements AutoCloseable {
         this.pboId = -1;
     }
 
-    public void startDownload(GpuTexture gpuTexture, int width, int height) {
+    public void startDownload(RenderTarget framebuffer, int width, int height) {
         if (this.isDownloading) {
             throw new IllegalStateException("Can't start downloading while already downloading");
         }
@@ -39,8 +39,7 @@ public class SaveableFramebuffer implements AutoCloseable {
             GL30C.glBindBuffer(GL30C.GL_PIXEL_PACK_BUFFER, 0);
         }
 
-        int fbo = ((GlTexture)gpuTexture).getFbo(((GlDevice)RenderSystem.getDevice()).directStateAccess(), null);
-        GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+        framebuffer.bindWrite(true);
 
         GL30C.glBindBuffer(GL30C.GL_PIXEL_PACK_BUFFER, this.pboId);
         GlStateManager._pixelStore(GL11.GL_PACK_ALIGNMENT, 1);
@@ -50,7 +49,7 @@ public class SaveableFramebuffer implements AutoCloseable {
         GL30C.glReadPixels(0, 0, width, height, GL30C.GL_RGBA, GL30C.GL_UNSIGNED_BYTE, 0);
         GL30C.glBindBuffer(GL30C.GL_PIXEL_PACK_BUFFER, 0);
 
-        GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+        framebuffer.unbindWrite();
     }
 
     public NativeImage finishDownload(int width, int height) {

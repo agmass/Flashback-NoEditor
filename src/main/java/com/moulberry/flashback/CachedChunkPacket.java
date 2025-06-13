@@ -50,6 +50,7 @@ public class CachedChunkPacket {
         digest.update(frenBuffer.array(), 0, frenBuffer.writerIndex());
         frenBuffer.resetWriterIndex();
 
+        frenBuffer.writeNbt(packet.getChunkData().getHeightmaps());
         digest.update(frenBuffer.array(), 0, frenBuffer.writerIndex());
         frenBuffer.resetWriterIndex();
 

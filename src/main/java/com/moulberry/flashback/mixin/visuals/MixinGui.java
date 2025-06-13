@@ -55,7 +55,7 @@ public abstract class MixinGui {
                 }
             }
             this.cameraGameType = Minecraft.getInstance().gameMode.getPlayerMode();
-            this.shouldHideElements = ReplayUI.isActive() || Flashback.isExporting();
+            this.shouldHideElements = ReplayUI.isActive();
         }
     }
 

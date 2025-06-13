@@ -1,6 +1,6 @@
 package com.moulberry.flashback.editor.ui;
 
-import com.mojang.blaze3d.opengl.GlStateManager;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.TextureUtil;
 import com.mojang.blaze3d.platform.Window;
 import com.moulberry.flashback.Flashback;
@@ -8,6 +8,8 @@ import com.moulberry.flashback.configuration.FlashbackConfig;
 import com.moulberry.flashback.editor.ui.windows.ExportDoneWindow;
 import com.moulberry.flashback.editor.ui.windows.ExportQueueWindow;
 import com.moulberry.flashback.editor.ui.windows.ExportScreenshotWindow;
+import com.moulberry.flashback.editor.ui.windows.MovementWindow;
+import com.moulberry.flashback.editor.ui.windows.PlayerListWindow;
 import com.moulberry.flashback.editor.ui.windows.PreferencesWindow;
 import com.moulberry.flashback.editor.ui.windows.SelectedEntityPopup;
 import com.moulberry.flashback.editor.ui.windows.WindowType;
@@ -25,7 +27,6 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.client.gui.screens.ProgressScreen;
 import net.minecraft.client.gui.screens.ReceivingLevelScreen;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
@@ -84,6 +85,10 @@ public class ReplayUI {
     private static boolean wasNavClose = false;
     private static boolean navClose = false;
 
+    private static final Lock deferredCloseLock = new ReentrantLock();
+    private static final IntList deferredCloseTextureIds = new IntArrayList();
+    private static final List<AutoCloseable> deferredClose = new ArrayList<>();
+
     private static float globalScale = 1.0f;
     public static float newGlobalScale = 1.0f;
     private static float contentScale = 1.0f;
@@ -104,7 +109,7 @@ public class ReplayUI {
 
     public static void init() {
         if (initialized) {
-            return;
+            throw new IllegalStateException("ReplayUI initialized twice");
         }
         initialized = true;
 
@@ -421,6 +426,24 @@ public class ReplayUI {
         return true;
     }
 
+    public static void deferredCloseTextureId(int textureId) {
+        deferredCloseLock.lock();
+        try {
+            deferredCloseTextureIds.add(textureId);
+        } finally {
+            deferredCloseLock.unlock();
+        }
+    }
+
+    public static void deferredClose(AutoCloseable autoCloseable) {
+        deferredCloseLock.lock();
+        try {
+            deferredClose.add(autoCloseable);
+        } finally {
+            deferredCloseLock.unlock();
+        }
+    }
+
     public static boolean isActive() {
         return activeLastFrame;
     }
@@ -466,16 +489,9 @@ public class ReplayUI {
     }
 
     public static void drawOverlay() {
-        if (!initialized && Minecraft.getInstance().getOverlay() instanceof LoadingOverlay) {
-            return;
-        }
-
-        init();
-
-        GlStateManager._disableColorLogicOp(); // Needed on 1.21.5 because vanilla doesn't reset this after rendering
-
         long oldImGuiContext = ImGui.getCurrentContext().ptr;
         ImGui.setCurrentContext(imGuiContext);
+
         try {
             drawOverlayInternal();
         } finally {
@@ -493,6 +509,23 @@ public class ReplayUI {
 
         if (!initialized) {
             throw new IllegalStateException("Tried to use EditorUI while it was not initialized");
+        }
+
+        deferredCloseLock.lock();
+        try {
+            for (int id : deferredCloseTextureIds) {
+                TextureUtil.releaseTextureId(id);
+            }
+            deferredCloseTextureIds.clear();
+
+            for (AutoCloseable closeable : deferredClose) {
+                try {
+                    closeable.close();
+                } catch (Exception e) {}
+            }
+            deferredClose.clear();
+        } finally {
+            deferredCloseLock.unlock();
         }
 
         if (Minecraft.getInstance().screen instanceof ProgressScreen || Minecraft.getInstance().screen instanceof ReceivingLevelScreen) {

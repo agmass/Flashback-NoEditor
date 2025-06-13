@@ -2,16 +2,17 @@ package com.moulberry.flashback.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.framegraph.FrameGraphBuilder;
+import com.mojang.blaze3d.framegraph.FramePass;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.opengl.GlStateManager;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.resource.ResourceHandle;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.moulberry.flashback.Flashback;
@@ -19,6 +20,7 @@ import com.moulberry.flashback.playback.ReplayServer;
 import com.moulberry.flashback.state.EditorState;
 import com.moulberry.flashback.state.EditorStateManager;
 import com.moulberry.flashback.editor.ui.ReplayUI;
+import com.moulberry.flashback.exporting.PerfectFrames;
 import com.moulberry.flashback.visuals.ReplayVisuals;
 import com.moulberry.flashback.visuals.ShaderManager;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -29,16 +31,17 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.renderer.*;
+import net.minecraft.client.renderer.chunk.RenderRegionCache;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.biome.Biome;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL30;
-import org.lwjgl.opengl.GL32;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -48,7 +51,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.OptionalInt;
+import java.util.Objects;
 
 @Mixin(value = LevelRenderer.class, priority = 1100)
 public abstract class MixinLevelRenderer {
@@ -81,12 +84,12 @@ public abstract class MixinLevelRenderer {
     }
 
     @Unique
-    private GpuTexture roundAlphaBuffer = null;
+    private RenderTarget roundAlphaBuffer = null;
 
     @Inject(method = "close", at = @At("HEAD"))
     public void close(CallbackInfo ci) {
         if (this.roundAlphaBuffer != null) {
-            this.roundAlphaBuffer.close();
+            this.roundAlphaBuffer.destroyBuffers();
         }
     }
 
@@ -114,31 +117,37 @@ public abstract class MixinLevelRenderer {
             RenderTarget main = Minecraft.getInstance().mainRenderTarget;
 
             if (this.roundAlphaBuffer == null) {
-                this.roundAlphaBuffer = RenderSystem.getDevice().createTexture(() -> "flip buffer", TextureFormat.RGBA8, main.width, main.height, 1);
-            } else if (this.roundAlphaBuffer.getWidth(0) != main.width || this.roundAlphaBuffer.getHeight(0) != main.height) {
-                this.roundAlphaBuffer.close();
-                this.roundAlphaBuffer = RenderSystem.getDevice().createTexture(() -> "flip buffer", TextureFormat.RGBA8, main.width, main.height, 1);
+                this.roundAlphaBuffer = new TextureTarget(main.width, main.height, false);
+            } else if (this.roundAlphaBuffer.width != main.width || this.roundAlphaBuffer.height != main.height) {
+                this.roundAlphaBuffer.destroyBuffers();
+                this.roundAlphaBuffer = new TextureTarget(main.width, main.height, false);
             }
 
-            RenderSystem.AutoStorageIndexBuffer autoStorageIndexBuffer = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
-            GpuBuffer indexBuffer = autoStorageIndexBuffer.getBuffer(6);
-            GpuBuffer vertexBuffer = RenderSystem.getQuadVertexBuffer();
+            this.roundAlphaBuffer.bindWrite(true);
 
-            try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(this.roundAlphaBuffer, OptionalInt.empty())) {
-                renderPass.setPipeline(ShaderManager.BLIT_SCREEN);
-                renderPass.setVertexBuffer(0, vertexBuffer);
-                renderPass.setIndexBuffer(indexBuffer, autoStorageIndexBuffer.type());
-                renderPass.bindSampler("InSampler", main.getColorTexture());
-                renderPass.drawIndexed(0, 6);
-            }
+            GlStateManager._disableDepthTest();
+            GlStateManager._depthMask(false);
+            GlStateManager._viewport(0, 0, main.viewWidth, main.viewHeight);
+            GlStateManager._disableBlend();
+            CompiledShaderProgram shaderInstance = Objects.requireNonNull(
+                RenderSystem.setShader(ShaderManager.blitScreenRoundAlpha), "Blit shader not loaded"
+            );
+            shaderInstance.bindSampler("InSampler", main.colorTextureId);
+            shaderInstance.apply();
+            BufferBuilder bufferBuilder = RenderSystem.renderThreadTesselator().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLIT_SCREEN);
+            bufferBuilder.addVertex(0.0f, 0.0f, 0.0f);
+            bufferBuilder.addVertex(1.0f, 0.0f, 0.0f);
+            bufferBuilder.addVertex(1.0f, 1.0f, 0.0f);
+            bufferBuilder.addVertex(0.0f, 1.0f, 0.0f);
+            BufferUploader.draw(bufferBuilder.buildOrThrow());
+            shaderInstance.clear();
 
-            try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(main.getColorTexture(), OptionalInt.empty())) {
-                renderPass.setPipeline(ShaderManager.BLIT_SCREEN_ROUND_ALPHA);
-                renderPass.setVertexBuffer(0, vertexBuffer);
-                renderPass.setIndexBuffer(indexBuffer, autoStorageIndexBuffer.type());
-                renderPass.bindSampler("InSampler", this.roundAlphaBuffer);
-                renderPass.drawIndexed(0, 6);
-            }
+            main.bindWrite(true);
+            this.roundAlphaBuffer.blitToScreen(main.width, main.height);
+
+            GlStateManager._enableBlend();
+            GlStateManager._depthMask(true);
+            GlStateManager._enableDepthTest();
         }
     }
 

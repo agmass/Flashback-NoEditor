@@ -35,8 +35,7 @@ public record MinecraftKeyframeHandler(Minecraft minecraft) implements KeyframeH
                 Minecraft.getInstance().getConnection().sendUnsignedCommand("spectate");
             }
 
-            player.snapTo(position.x, position.y, position.z, (float) yaw, (float) pitch);
-            player.getInterpolation().cancel();
+            player.moveTo(position.x, position.y, position.z, (float) yaw, (float) pitch);
 
             EditorState editorState = EditorStateManager.getCurrent();
             if (editorState != null) {

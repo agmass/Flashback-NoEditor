@@ -156,7 +156,7 @@ public class ReplayGamePacketHandler implements ClientGamePacketListener {
             try {
                 level.addFreshEntity(pendingEntity);
                 ChunkPos chunkPos = new ChunkPos(pendingEntity.blockPosition());
-                level.getChunkSource().addTicketWithRadius(ReplayServer.ENTITY_LOAD_TICKET, chunkPos, 3);
+                level.getChunkSource().addRegionTicket(ReplayServer.ENTITY_LOAD_TICKET, chunkPos, 3, chunkPos);
             } catch (Exception e) {
                 Flashback.LOGGER.error("Unable to spawn entity", e);
             }
@@ -269,6 +269,32 @@ public class ReplayGamePacketHandler implements ClientGamePacketListener {
         } else {
             return entityType.create(this.level(), EntitySpawnReason.LOAD);
         }
+    }
+
+    @Override
+    public void handleAddExperienceOrb(ClientboundAddExperienceOrbPacket clientboundAddExperienceOrbPacket) {
+        double x = clientboundAddExperienceOrbPacket.getX();
+        double y = clientboundAddExperienceOrbPacket.getY();
+        double z = clientboundAddExperienceOrbPacket.getZ();
+        ExperienceOrb entity = new ExperienceOrb(this.level(), x, y, z, clientboundAddExperienceOrbPacket.getValue());
+        entity.syncPacketPositionCodec(x, y, z);
+        entity.setYRot(0.0f);
+        entity.setXRot(0.0f);
+        entity.setId(clientboundAddExperienceOrbPacket.getId());
+        entity.setDeltaMovement(Vec3.ZERO);
+
+        Entity existingEntity = this.level().getEntity(clientboundAddExperienceOrbPacket.getId());
+        if (existingEntity instanceof ExperienceOrb) {
+            existingEntity.restoreFrom(entity);
+            return;
+        } else if (existingEntity != null) {
+            existingEntity.discard();
+        }
+
+        ServerLevel level = this.level();
+        ((ServerLevelExt) level).flashback$setCanSpawnEntities(true);
+        level.addFreshEntity(entity);
+        ((ServerLevelExt) level).flashback$setCanSpawnEntities(false);
     }
 
     @Override
@@ -545,6 +571,8 @@ public class ReplayGamePacketHandler implements ClientGamePacketListener {
             return;
         } else if (type == ClientboundGameEventPacket.DEMO_EVENT) {
             return;
+        } else if (type == ClientboundGameEventPacket.ARROW_HIT_PLAYER) {
+            return;
         } else if (type == ClientboundGameEventPacket.RAIN_LEVEL_CHANGE) {
             level.setRainLevel(floatValue);
         } else if (type == ClientboundGameEventPacket.THUNDER_LEVEL_CHANGE) {
@@ -719,9 +747,7 @@ public class ReplayGamePacketHandler implements ClientGamePacketListener {
         if (existing == null) {
             this.spawnPlayer(addEntityPacket, gameProfile, gameType);
         } else {
-            existing.snapTo(x, y, z, yRot, xRot);
-            var interpolation = existing.getInterpolation();
-            if (interpolation != null) interpolation.cancel();
+            existing.moveTo(x, y, z, yRot, xRot);
             existing.setDeltaMovement(velocity);
         }
     }
@@ -1003,16 +1029,16 @@ public class ReplayGamePacketHandler implements ClientGamePacketListener {
 
         Inventory inventory = player.getInventory();
 
-        if (inventory.getSelectedSlot() == clientboundSetHeldSlotPacket.slot()) {
+        if (inventory.selected == clientboundSetHeldSlotPacket.slot()) {
             return;
         }
 
-        inventory.setSelectedSlot(clientboundSetHeldSlotPacket.slot());
+        inventory.selected = clientboundSetHeldSlotPacket.slot();
 
         for (ReplayPlayer replayViewer : this.replayServer.getReplayViewers()) {
             if (Objects.equals(replayViewer.lastFirstPersonDataUUID, player.getUUID())) {
-                replayViewer.lastFirstPersonSelectedSlot = inventory.getSelectedSlot();
-                ServerPlayNetworking.send(replayViewer, new FlashbackRemoteSelectHotbarSlot(player.getId(), inventory.getSelectedSlot()));
+                replayViewer.lastFirstPersonSelectedSlot = inventory.selected;
+                ServerPlayNetworking.send(replayViewer, new FlashbackRemoteSelectHotbarSlot(player.getId(), inventory.selected));
             }
         }
     }
@@ -1215,10 +1241,10 @@ public class ReplayGamePacketHandler implements ClientGamePacketListener {
         PositionMoveRotation change = clientboundTeleportEntityPacket.change();
         Set<Relative> relatives = clientboundTeleportEntityPacket.relatives();
 
-        PositionMoveRotation lerpTarget = PositionMoveRotation.of(entity);
+        PositionMoveRotation lerpTarget = PositionMoveRotation.ofEntityUsingLerpTarget(entity);
         PositionMoveRotation absolute = PositionMoveRotation.calculateAbsolute(lerpTarget, change, relatives);
 
-        entity.snapTo(absolute.position().x(), absolute.position().y(), absolute.position().z(), absolute.yRot(), absolute.xRot());
+        entity.moveTo(absolute.position().x(), absolute.position().y(), absolute.position().z(), absolute.yRot(), absolute.xRot());
         entity.setDeltaMovement(absolute.deltaMovement());
         entity.setOnGround(clientboundTeleportEntityPacket.onGround());
         entity.setYHeadRot(entity.getYRot());
@@ -1387,7 +1413,7 @@ public class ReplayGamePacketHandler implements ClientGamePacketListener {
                 double z = clientboundMoveVehiclePacket.position().z;
                 float yaw = clientboundMoveVehiclePacket.yRot();
                 float pitch = clientboundMoveVehiclePacket.xRot();
-                vehicle.snapTo(x, y, z, yaw, pitch);
+                vehicle.moveTo(x, y, z, yaw, pitch);
             }
         }
     }
@@ -1645,11 +1671,6 @@ public class ReplayGamePacketHandler implements ClientGamePacketListener {
     @Override
     public void handlePongResponse(ClientboundPongResponsePacket clientboundPongResponsePacket) {
         throw new UnsupportedPacketException(clientboundPongResponsePacket);
-    }
-
-    @Override
-    public void handleTestInstanceBlockStatus(ClientboundTestInstanceBlockStatus clientboundTestInstanceBlockStatus) {
-        throw new UnsupportedPacketException(clientboundTestInstanceBlockStatus);
     }
 
     @Override

@@ -1,23 +1,25 @@
 package com.moulberry.flashback.visuals;
 
 import com.mojang.blaze3d.buffers.BufferUsage;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.Window;
-import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.moulberry.flashback.Utils;
 import com.moulberry.flashback.combo_options.Sizing;
 import com.moulberry.flashback.editor.ui.windows.TimelineWindow;
+import com.moulberry.flashback.keyframe.KeyframeType;
 import com.moulberry.flashback.keyframe.change.*;
 import com.moulberry.flashback.keyframe.handler.KeyframeHandler;
+import com.moulberry.flashback.keyframe.types.CameraKeyframeType;
+import com.moulberry.flashback.keyframe.types.CameraOrbitKeyframeType;
+import com.moulberry.flashback.keyframe.types.FOVKeyframeType;
 import com.moulberry.flashback.playback.ReplayServer;
 import com.moulberry.flashback.state.EditorScene;
 import com.moulberry.flashback.state.EditorState;
@@ -25,21 +27,23 @@ import com.moulberry.flashback.state.EditorStateManager;
 import com.moulberry.flashback.state.KeyframeTrack;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.CompiledShaderProgram;
+import net.minecraft.client.renderer.CoreShaders;
 import net.minecraft.client.renderer.FogParameters;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Quaterniond;
 import org.joml.Quaternionf;
 import org.joml.Vector3d;
+import org.joml.Vector3f;
 
-import java.util.OptionalDouble;
-import java.util.OptionalInt;
+import java.util.EnumSet;
+import java.util.Set;
 
 public class CameraPath {
 
-    private static FlashbackDrawBuffer cameraPathVertexBuffer = null;
+    private static VertexBuffer cameraPathVertexBuffer = null;
     private static CameraPathArgs lastCameraPathArgs = null;
     private static Vector3d basePosition = null;
     private static int lastEditorStateModCount = 0;
@@ -80,8 +84,10 @@ public class CameraPath {
                 MeshData meshData = bufferBuilder.build();
                 if (meshData != null) {
                     CameraPath.basePosition = basePosition;
-                    cameraPathVertexBuffer = new FlashbackDrawBuffer(BufferUsage.STATIC_WRITE);
+                    cameraPathVertexBuffer = new VertexBuffer(BufferUsage.STATIC_WRITE);
+                    cameraPathVertexBuffer.bind();
                     cameraPathVertexBuffer.upload(meshData);
+                    VertexBuffer.unbind();
                 }
             }
 
@@ -93,6 +99,11 @@ public class CameraPath {
             return;
         }
 
+        RenderSystem.disableCull();
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.lineWidth(2f);
+        CompiledShaderProgram shaderInstance = RenderSystem.setShader(CoreShaders.RENDERTYPE_LINES);
         var oldFog = RenderSystem.getShaderFog();
         RenderSystem.setShaderFog(FogParameters.NO_FOG);
         RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
@@ -101,14 +112,9 @@ public class CameraPath {
         poseStack.translate(basePosition.x-camera.getPosition().x,
             basePosition.y-camera.getPosition().y + camera.eyeHeight, basePosition.z-camera.getPosition().z);
 
-        RenderType.lines().setupRenderState();
-        RenderSystem.lineWidth(2f);
-
-        var stack = RenderSystem.getModelViewStack();
-        stack.pushMatrix();
-        stack.set(poseStack.last().pose());
-
-        cameraPathVertexBuffer.draw();
+        cameraPathVertexBuffer.bind();
+        cameraPathVertexBuffer.drawWithShader(poseStack.last().pose(), RenderSystem.getProjectionMatrix(), shaderInstance);
+        VertexBuffer.unbind();
 
         if (replayServer.replayPaused) {
             var handler = new CapturingKeyframeHandler();
@@ -121,16 +127,18 @@ public class CameraPath {
                 BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL);
                 renderCamera(bufferBuilder, handler.position.sub(basePosition, new Vector3d()), handler.angle, fovHandler.fov,
                     getCameraColour(false, true), 1.0f);
-                RenderType.lines().draw(bufferBuilder.buildOrThrow());
+
+                var oldModelViewMatrix = new Matrix4f(RenderSystem.getModelViewMatrix());
+                RenderSystem.getModelViewMatrix().set(poseStack.last().pose());
+                BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
+                RenderSystem.getModelViewMatrix().set(oldModelViewMatrix);
             }
         }
-
-        stack.popMatrix();
 
         poseStack.popPose();
 
         RenderSystem.setShaderFog(oldFog);
-        RenderType.lines().clearRenderState();
+        RenderSystem.enableCull();
     }
 
     private record CameraPathArgs(int lastLastCameraTick, int lastCameraTick, int nextCameraTick, int nextNextCameraTick) {}
